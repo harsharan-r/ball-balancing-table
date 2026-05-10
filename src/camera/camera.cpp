@@ -94,12 +94,7 @@ void frameProcessing(FrameBuffer *buffer, StreamConfiguration const &cfg, bool s
   cv::erode(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
   cv::dilate(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
 
-  //if(save_frame) {
-    detectPingPongBall(bgrFrame, mask);                                                 
-  //  cv::imwrite("ball_mask.jpg", mask);                       
-  //  cv::imwrite("ball.jpg", bgrFrame);
-  //  cv::imwrite("ball_hsv.jpg", hsvFrame);
-  //}
+  detectPingPongBall(bgrFrame, mask);                                                 
                                               
   if(save_frame) cv::imwrite(FRAME_NAME, bgrFrame);
                                   
