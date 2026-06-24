@@ -1,0 +1,42 @@
+perception:
+  camera:
+    # Stream Settings
+    CAMERA_STREAM_INDEX: 0
+    CAMERA_STREAM_INDEX: 0
+    CAMERA_STREAM_WIDTH: 2304
+    CAMERA_STREAM_HEIGHT: 1296
+    CAMERA_FRAME_RATE: 25
+    CAMERA_AE_ENABLE: true
+    CAMERA_AE_WARMUP_FRAMES: 20
+    CAMERA_EXPOSURE_TIME: 6000
+
+    # Image Processing Settings 
+    IMAGE_DOWNSAMPLING_FACTOR: 10
+    IMAGE_CROP_WIDTH: 800
+    IMAGE_CROP_HEIGHT: 450
+
+    # Calibration Settings
+    CALIBRATION_MARGIN: 2.5
+    CALIBRATION_X_PX: 1152
+    CALIBRATION_Y_PX: 648
+    CALIBRATION_RADIUS_PX: 200
+    HSV_HUE_MIN: 0
+    HSV_SAT_MIN: 0
+    HSV_VALUE_MIN: 0
+    HSV_HUE_MAX: 179
+    HSV_SAT_MAX: 255
+    HSV_VALUE_MAX: 255
+
+    # Default Ball Values Before Calibration
+    BALL_HUE_MIN: 0
+    BALL_HUE_MAX: 378
+    BALL_SAT_MIN: 88
+    BALL_SAT_MAX: 255
+    BALL_VALUE_MIN: 28
+    BALL_VALUE_MAX: 93
+
+action:
+
+control:
+
+gpio:
