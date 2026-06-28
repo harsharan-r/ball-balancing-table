@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <thread>
 #include <chrono>
+#include <shared_mutex>
 
 #include <sys/mman.h>
 
@@ -12,8 +13,16 @@
 
 using namespace libcamera;
 
-BallTracker::BallTracker(const std::string& config_path)
-    : cm_(std::make_unique<CameraManager>())
+BallTracker::BallTracker(const std::string& config_path, 
+                         std::shared_ptr<double> ball_x, 
+                         std::shared_ptr<double> ball_y, 
+                         std::shared_ptr<double> ball_radius,
+                         std::shared_mutex& ball_mtx)
+    : cm_(std::make_unique<CameraManager>()),
+      ball_x_(ball_x),
+      ball_y_(ball_y),
+      ball_radius_(ball_radius),
+      ball_mtx_(ball_mtx)
 {
     YAML::Node config = YAML::LoadFile(config_path)["perception"]["camera"];
     cfg_ = CameraConfig(config);
@@ -29,125 +38,232 @@ BallTracker::BallTracker(const std::string& config_path)
 }
 
 void BallTracker::config_camera() {
-    if (cm_->start() < 0) {
-        throw std::runtime_error("Failed to start CameraManager");
-    }
+  if (cm_->start() < 0) {
+    throw std::runtime_error("Failed to start CameraManager");
+  }
 
-    auto cameras = cm_->cameras();
-    if (cameras.empty()) {
-        throw std::runtime_error("No cameras found");
-    }
+  auto cameras = cm_->cameras();
+  if (cameras.empty()) {
+    throw std::runtime_error("No cameras found");
+  }
 
-    camera_ = cm_->get(cameras[0]->id());
-    if (!camera_) {
-        throw std::runtime_error("Failed to get camera");
-    }
+  camera_ = cm_->get(cameras[0]->id());
+  if (!camera_) {
+    throw std::runtime_error("Failed to get camera");
+  }
 
-    if (camera_->acquire() < 0) {
-        throw std::runtime_error("Failed to acquire camera");
-    }
+  if (camera_->acquire() < 0) {
+    throw std::runtime_error("Failed to acquire camera");
+  }
 
-    auto config = camera_->generateConfiguration({ StreamRole::Viewfinder });
-    if (!config || config->size() != 1) {
-        throw std::runtime_error("Failed to create libcamera config");
-    }
+  auto config = camera_->generateConfiguration({ StreamRole::Viewfinder });
+  if (!config || config->size() != 1) {
+    throw std::runtime_error("Failed to create libcamera config");
+  }
 
-    StreamConfiguration &streamConfig = config->at(cfg_.camera_stream_index);
-    streamConfig.size.width = cfg_.camera_stream_width;
-    streamConfig.size.height = cfg_.camera_stream_height;
-    config->validate();
+  StreamConfiguration &streamConfig = config->at(cfg_.camera_stream_index);
+  streamConfig.size.width = cfg_.camera_stream_width;
+  streamConfig.size.height = cfg_.camera_stream_height;
+  config->validate();
 
-    if (camera_->configure(config.get()) < 0) {
-        throw std::runtime_error("Failed to set libcamera config");
-    }
+  if (camera_->configure(config.get()) < 0) {
+    throw std::runtime_error("Failed to set libcamera config");
+  }
 
-    allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
-    stream_ = streamConfig.stream();
+  allocator_ = std::make_unique<FrameBufferAllocator>(camera_);
+  stream_ = streamConfig.stream();
 
-    if (allocator_->allocate(stream_) < 0) {
-        throw std::runtime_error("Failed to allocate memory for libcamera");
-    }
+  if (allocator_->allocate(stream_) < 0) {
+    throw std::runtime_error("Failed to allocate memory for libcamera");
+  }
 
-    camera_->requestCompleted.connect(this, &BallTracker::requestComplete);
+  camera_->requestCompleted.connect(this, &BallTracker::requestComplete);
 
-    controls_ = std::make_unique<ControlList>();
-    controls_->set(
-        controls::FrameDurationLimits,
-        Span<const int64_t, 2>({
-            cfg_.camera_min_frame_duration,
-            cfg_.camera_max_frame_duration
-        })
-    );
+  controls_ = std::make_unique<ControlList>();
+  controls_->set(
+      controls::FrameDurationLimits,
+      Span<const int64_t, 2>({
+          cfg_.camera_min_frame_duration,
+          cfg_.camera_max_frame_duration
+      })
+  );
 
-    controls_->set(controls::ExposureTime, cfg_.camera_exposure_time);
+  controls_->set(controls::ExposureTime, cfg_.camera_exposure_time);
 }
 
 void BallTracker::requestComplete(Request *request) {
-    if (request->status() == Request::RequestCancelled) {
-        return;
+  if (request->status() == Request::RequestCancelled) {
+    return;
+  }
+
+  for (const auto &p : request->buffers()) {
+    FrameBuffer *buffer = p.second;
+    const StreamConfiguration &cfg = p.first->configuration();
+    const FrameMetadata &meta = buffer->metadata();
+
+    (void)buffer;
+    (void)cfg;
+
+    if(mode == Mode::Calibration){
+        calibrate(request, buffer, cfg);
+    }
+    else if(mode == Mode::Track){
+        track(buffer, cfg);
     }
 
-    for (const auto &p : request->buffers()) {
-        FrameBuffer *buffer = p.second;
-        const StreamConfiguration &cfg = p.first->configuration();
-        const FrameMetadata &meta = buffer->metadata();
+    std::cout << "Frame seq=" << meta.sequence << std::endl;
+  }
 
-        (void)buffer;
-        (void)cfg;
+  if (!is_camera_started) {
+    return;
+  }
 
-        if(mode == Mode::Calibration){
-            calibrate(request, buffer, cfg);
-        }
-        else if(mode == Mode::Track){
-            // TODO: Add tracking code
-        }
+  request->reuse(Request::ReuseBuffers);
 
-        std::cout << "Frame seq=" << meta.sequence << std::endl;
-    }
+  if (camera_->queueRequest(request) < 0) {
+      throw std::runtime_error("Failed to queue request");
+  }
+}
 
-    if (!is_camera_started) {
-        return;
-    }
+void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, bool save_frame){
 
-    request->reuse(Request::ReuseBuffers);
+  uint8_t *frame_data;
+  cv::Mat bgrxFrame = stream_buffer_to_bgrx(frame_data, buffer, cfg);
 
-    if (camera_->queueRequest(request) < 0) {
-        throw std::runtime_error("Failed to queue request");
-    }
+  auto t2 = std::chrono::high_resolution_clock::now();  
+
+  int frame_center_x = (cfg_.camera_stream_width  - cfg_.image_crop_width)  / 2;
+  int frame_center_y = (cfg_.camera_stream_height - cfg_.image_crop_height) / 2;
+
+  cv::Rect roi(frame_center_x, frame_center_y, cfg_.image_crop_width, cfg_.image_crop_height);
+
+  bgrxFrame =  bgrxFrame(roi);
+
+  cv::resize(bgrxFrame, 
+              bgrxFrame, 
+              cv::Size(cfg_.image_crop_width/cfg_.image_downsampling_factor,
+                      cfg_.image_crop_height/cfg_.image_downsampling_factor));  
+     
+  auto t3 = std::chrono::high_resolution_clock::now();
+                 
+  cv::Mat bgrFrame;
+  
+  cv::cvtColor(bgrxFrame, bgrFrame, cv::COLOR_BGRA2BGR);                                          
+  
+  auto t4 = std::chrono::high_resolution_clock::now();
+
+  cv::Mat hsvFrame;
+  cv::cvtColor(bgrFrame, hsvFrame, cv::COLOR_BGR2HSV);                     
+ 
+  auto t5 = std::chrono::high_resolution_clock::now();
+
+  cv::Scalar lower(ball_hue_min, ball_sat_min, ball_value_min);
+  cv::Scalar upper(ball_hue_max, ball_sat_max, ball_value_max);
+
+  cv::Mat mask;
+  cv::inRange(hsvFrame, lower, upper, mask);
+  
+  auto t6 = std::chrono::high_resolution_clock::now();
+
+  cv::erode(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
+  cv::dilate(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
+
+  auto t7 = std::chrono::high_resolution_clock::now();
+  detectPingPongBall(bgrFrame, mask);                                                 
+                                         
+  auto t8 = std::chrono::high_resolution_clock::now();
+     
+  if(save_frame) cv::imwrite("ball_detection.jpg", bgrFrame);
+                                  
+  munmap(frame_data, buffer->planes()[0].length);    
+  
+  // TODO: remove and remove timing variables
+  std::cout << "Resize/Crop: " << std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count() << "μs\n";
+  std::cout << "BGR: " << std::chrono::duration_cast<std::chrono::microseconds>(t4-t3).count() << "μs\n";
+  std::cout << "HSV: " << std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count() << "μs\n";
+  std::cout << "Mask: " << std::chrono::duration_cast<std::chrono::microseconds>(t6-t5).count() << "μs\n";
+  std::cout << "Morph: " << std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count() << "μs\n";
+  std::cout << "Detect: " << std::chrono::duration_cast<std::chrono::microseconds>(t8-t7).count() << "μs\n";
+}
+
+void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
+
+  std::vector<std::vector<cv::Point>> contours;
+  cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+  
+  if (!contours.empty()) {
+    auto largest = std::max_element(contours.begin(), contours.end(),
+        [](const std::vector<cv::Point>& a, const std::vector<cv::Point>& b) {
+            return cv::contourArea(a) < cv::contourArea(b);
+        });
+    
+    cv::Point2f center;
+    float radius;
+    cv::minEnclosingCircle(*largest, center, radius);
+    
+
+    std::unique_lock<std::shared_mutex> lock(ball_mtx_);
+
+    double half_crop_width = cfg_.image_crop_width/cfg_.image_downsampling_factor/2;
+    double half_crop_height = cfg_.image_crop_height/cfg_.image_downsampling_factor/2;
+
+    *ball_x_ = (center.x-half_crop_width)/half_crop_width;
+    *ball_y_ = (center.y-half_crop_height)/half_crop_height;
+    *ball_radius_ = static_cast<double>(radius)/(half_crop_width+half_crop_width);
+    is_ball_values_stale = false;
+
+    
+    std::cout << "Ball at (" << *ball_x_ << ", " << *ball_y_
+              << ") radius=" << *ball_radius_ << std::endl;
+
+    lock.unlock();
+    
+    // Draw detection
+    cv::circle(frame, center, static_cast<int>(radius), cv::Scalar(0, 255, 0), 2);
+    cv::circle(frame, center, 3, cv::Scalar(0, 0, 255), -1);
+  }
+  else{
+    is_ball_values_stale = true;
+  }
 }
 
 void BallTracker::calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, StreamConfiguration const &cfg){
-    if (is_calibrated) {
-        return;
+  std::shared_lock<std::shared_mutex> shr_lock(ball_mtx_);
+  if (is_calibrated) {
+    return;
+  }
+  shr_lock.unlock();
+
+  if (calibration_frames < cfg_.camera_ae_warmup_frames) {
+    calibration_frames++;
+    std::cout << "Warming up frames" << std::endl;
+    return;
+  }
+
+  if (calibration_frames == cfg_.camera_ae_warmup_frames) {
+    const ControlList &metadata = request->metadata();
+    auto exposure_opt = metadata.get(libcamera::controls::ExposureTime);
+
+    if (!exposure_opt.has_value()) {
+        throw std::runtime_error("ExposureTime not found in metadata");
     }
 
-    if (calibration_frames < cfg_.camera_ae_warmup_frames) {
-        calibration_frames++;
-        std::cout << "Warming up frames" << std::endl;
-        return;
-    }
+    int32_t exposure_time = exposure_opt.value();
 
-    if (calibration_frames == cfg_.camera_ae_warmup_frames) {
-        const ControlList &metadata = request->metadata();
-        auto exposure_opt = metadata.get(libcamera::controls::ExposureTime);
+    request->controls().set(libcamera::controls::AeEnable, false);
+    request->controls().set(libcamera::controls::ExposureTime, exposure_time);
 
-        if (!exposure_opt.has_value()) {
-            throw std::runtime_error("ExposureTime not found in metadata");
-        }
+    calibration_frames++;
+    std::cout << "Locking exposure" << std::endl;
+    return;
+  }
 
-        int32_t exposure_time = exposure_opt.value();
+  calibrate_ball_colour(buffer, cfg);
+  std::cout << "Calibrated colour" << std::endl;
 
-        request->controls().set(libcamera::controls::AeEnable, false);
-        request->controls().set(libcamera::controls::ExposureTime, exposure_time);
-
-        calibration_frames++;
-        std::cout << "Locking exposure" << std::endl;
-        return;
-    }
-
-    calibrate_ball_colour(buffer, cfg);
-    std::cout << "Calibrated colour" << std::endl;
-    is_calibrated = true;
+  std::unique_lock<std::shared_mutex> lock(ball_mtx_);
+  is_calibrated = true;
+  calibration_frames = 0;
 }
 
 void BallTracker::calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg){
@@ -221,49 +337,49 @@ cv::Mat BallTracker::stream_buffer_to_bgrx(uint8_t *&ptr,
 }
 
 void BallTracker::startTracking(){
-    mode = Mode::Track;
-    startCamera();
+  mode = Mode::Track;
+  startCamera();
 }
 
 void BallTracker::startCalibration(){
-    is_calibrated = false;
-    mode = Mode::Calibration;
-    startCamera();
+  is_calibrated = false;
+  mode = Mode::Calibration;
+  startCamera();
 }
 
 void BallTracker::startCamera() {
     
-    const auto &buffers = allocator_->buffers(stream_);
+  const auto &buffers = allocator_->buffers(stream_);
 
-    requests_.clear();
-    for (const auto &buffer : buffers) {
-        auto request = camera_->createRequest();
-        if (!request) {
-            throw std::runtime_error("Failed to make request to libcamera");
-        }
-
-        if (request->addBuffer(stream_, buffer.get()) < 0) {
-            throw std::runtime_error("Failed to add allocated buffer to libcamera request");
-        }
-
-        requests_.push_back(std::move(request));
+  requests_.clear();
+  for (const auto &buffer : buffers) {
+    auto request = camera_->createRequest();
+    if (!request) {
+        throw std::runtime_error("Failed to make request to libcamera");
     }
 
-    if (!camera_) {
-        throw std::runtime_error("Camera not configured");
+    if (request->addBuffer(stream_, buffer.get()) < 0) {
+        throw std::runtime_error("Failed to add allocated buffer to libcamera request");
     }
 
-    if (camera_->start(controls_.get()) < 0) {
-        throw std::runtime_error("Failed to start camera");
-    }
+    requests_.push_back(std::move(request));
+  }
 
-    is_camera_started = true;
+  if (!camera_) {
+    throw std::runtime_error("Camera not configured");
+  }
 
-    for (auto &request : requests_) {
-        if (camera_->queueRequest(request.get()) < 0) {
-            throw std::runtime_error("Failed to queue request");
-        }
-    }
+  if (camera_->start(controls_.get()) < 0) {
+    throw std::runtime_error("Failed to start camera");
+  }
+
+  is_camera_started = true;
+
+  for (auto &request : requests_) {
+    if (camera_->queueRequest(request.get()) < 0) {
+      throw std::runtime_error("Failed to queue request");
+  }
+  }
 
 }
 
@@ -273,6 +389,7 @@ void BallTracker::stopCamera() {
     }
 
     is_camera_started = false;
+    mode = Mode::Idle;
     camera_->stop();
 }
 
@@ -295,22 +412,27 @@ void BallTracker::shutdown(){
     }
 } 
 
-int main(){
+// int main(){
 
-  BallTracker camera("../../../config/params.yaml");
-  
-  camera.startCalibration();
-  std::this_thread::sleep_for(std::chrono::seconds(3));
-  
-  camera.stopCamera();
-  std::this_thread::sleep_for(std::chrono::seconds(3));
-  
-  camera.startCamera();
-  std::this_thread::sleep_for(std::chrono::seconds(3));
+//   auto ball_x = std::make_shared<double>(-1.0);
+//   auto ball_y = std::make_shared<double>(-1.0);
+//   auto ball_radius = std::make_shared<double>(-1.0);
+//   std::shared_mutex ball_mtx;
 
-  camera.shutdown();
+//   BallTracker camera("../../../config/params.yaml", ball_x, ball_y, ball_radius, ball_mtx);
+  
+//   camera.startCalibration();
+//   std::this_thread::sleep_for(std::chrono::seconds(3));
+  
+//   camera.stopCamera();
+//   std::this_thread::sleep_for(std::chrono::seconds(3));
+  
+//   camera.startTracking();
+//   std::this_thread::sleep_for(std::chrono::seconds(3));
 
-}
+//   camera.shutdown();
+
+// }
 
 // Compile
 //  mkdir -p build && g++ -std=c++17 ball_tracker.cpp -o build/ball_tracker `pkg-config --cflags --libs opencv4 libcamera` -lyaml-cpp
