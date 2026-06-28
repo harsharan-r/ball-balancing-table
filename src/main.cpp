@@ -65,6 +65,14 @@ int main(){
     gpioSetSignalFunc(2, signalHandler);
     setup_gpio();
 
+
+    auto ball_x = std::make_shared<double>(0.0);
+    auto ball_y = std::make_shared<double>(0.0);
+    auto ball_radius = std::make_shared<double>(0.0);
+    std::shared_mutex ball_mtx;
+
+    BallTracker ball_tracker("../config/params.yaml", ball_x, ball_y, ball_radius, ball_mtx);
+
     while(keepRunning){
 
         if(state == "idle"){
@@ -73,23 +81,38 @@ int main(){
         }
         else if(state == "ready"){
             set_led_colour(0,0,255);
+
+            // Transition to idle state
             if(gpioRead(button_left_GPIO_pin) == 0 && gpioRead(button_right_GPIO_pin) == 0) {
                 state = "idle";
             }
+            // Transition to running state
             else if(gpioRead(button_left_GPIO_pin) == 0 && button_left_released){
+                ball_tracker.startTracking();
                 state = "running";
             } 
+            // Transition to calibration state
             else if(gpioRead(button_right_GPIO_pin) == 0 && button_right_released){
+                ball_tracker.startCalibration();
                 state = "calibration";
             }
         }
         else if(state == "running"){
             set_led_colour(150,150,15);
-            if(gpioRead(button_left_GPIO_pin) == 0 && button_left_released) state = "ready";
+            // Transition to ready state
+            if(gpioRead(button_left_GPIO_pin) == 0 && button_left_released){
+                ball_tracker.stopCamera();
+                state = "ready";
+            } 
         }
         else if(state == "calibration"){
             set_led_colour(100,0,180);
-            if(gpioRead(button_right_GPIO_pin) == 0 && button_right_released) state = "ready";
+            std::shared_lock<std::shared_mutex> lock(ball_mtx);
+            // Transition to ready state
+            if(ball_tracker.is_calibrated) {
+                ball_tracker.stopCamera();
+                state = "ready";
+            }
         }
 
         if(gpioRead(button_left_GPIO_pin) == 0 && button_left_released) button_left_released = false;
@@ -101,6 +124,7 @@ int main(){
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    ball_tracker.shutdown();
     cleanup_gpio();
     gpioTerminate();
 
@@ -108,4 +132,5 @@ int main(){
 }
 
 //compile
+// mkdir -p build &&  g++ -std=c++17 main.cpp ./perception/ball_tracker/ball_tracker.cpp -o build/main `pkg-config --cflags --libs opencv4 libcamera` -lyaml-cpp -lpigpio
 // g++ -Wall -pthread -o pigpio_blink main.cpp -lpigpio -lyaml-cpp
