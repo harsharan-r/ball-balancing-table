@@ -1,11 +1,9 @@
 // servo.h
-#ifndef SERVO_H
-#define SERVO_H
+#pragma once
 
 #include <cstdint>
 #include <stdexcept>
 
-// ── PCA9685 ──────────────────────────────────────────────
 class PCA9685 {
 public:
     // Opens I2C device at addr, resets chip, sets frequency
@@ -26,13 +24,12 @@ private:
 };
 
 
-// ── Servo ─────────────────────────────────────────────────
 class Servo {
 public:
     // board    — reference to an already-initialized PCA9685
     // channel  — which of the 16 channels this servo is on (0–15)
-    // minPulse — pulse width in µs that corresponds to 0°   (default 500)
-    // maxPulse — pulse width in µs that corresponds to 180° (default 2700)
+    // minPulse — pulse width in µs that corresponds to 0 deg (default 500)
+    // maxPulse — pulse width in µs that corresponds to 180 deg(default 2700)
     Servo(PCA9685& board,
           int channel,
           int minPulse = 500,
@@ -62,5 +59,3 @@ private:
     int SERVO_MIN;      // min pulse in ticks, derived from minPulse µs
     int SERVO_MAX;      // max pulse in ticks, derived from maxPulse µs
 };
-
-#endif

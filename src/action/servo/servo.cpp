@@ -1,5 +1,5 @@
 // servo.cpp
-#include "../../../include/servo.h"
+#include "../../../include/action/servo.h"
 #include <wiringPiI2C.h>
 #include <unistd.h>
 #include <iostream>
@@ -24,7 +24,7 @@ void PCA9685::reset() {
 }
 
 void PCA9685::setFreq(int freq) {
-    int prescale = (int)(25000000.0f / (4096.0f * freq) + 0.5f) - 1;
+    int prescale = static_cast<int>(25000000.0f / (4096.0f * freq) + 0.5f) - 1;
     int oldMode  = wiringPiI2CReadReg8(fd, MODE1_REG);
 
     wiringPiI2CWriteReg8(fd, MODE1_REG,     (oldMode & 0x7F) | 0x10);
@@ -46,13 +46,13 @@ void PCA9685::setPWM(int channel, int on, int off) {
 Servo::Servo(PCA9685& board, int channel, int minPulse, int maxPulse)
     : brd(board),
       servo_channel(channel),
-      SERVO_MIN((int)(minPulse / US_PER_TICK)),
-      SERVO_MAX((int)(maxPulse / US_PER_TICK))
+      SERVO_MIN(static_cast<int>(minPulse / US_PER_TICK)),
+      SERVO_MAX(static_cast<int>(maxPulse / US_PER_TICK))
 {}
 
 int Servo::angleToPulse(float angle) {
     if (angle < MIN_ANGLE || angle > MAX_ANGLE) return -1;
-    return (int)(SERVO_MIN + (angle / 180.0f) * (SERVO_MAX - SERVO_MIN));
+    return static_cast<int>(SERVO_MIN + (angle / 180.0f) * (SERVO_MAX - SERVO_MIN));
 }
 
 void Servo::setPWM(int on, int off) {
@@ -67,17 +67,19 @@ void Servo::setAngle(float angle) {
         setPWM(0, pulse);
 }
 
-// ── main ──────────────────────────────────────────────────
-int main() {
-    PCA9685 hat(0x40, 50);
+// int main() {
+//      PCA9685 hat(0x40, 50);
 
-    Servo servo_left  (hat,  9);
-    Servo servo_right (hat, 10);
-    Servo servo_center(hat, 11);
+//      Servo servo_left  (hat,  9);
+//      Servo servo_right (hat, 10);
+//      Servo servo_center(hat, 11);
 
-    servo_left.setAngle(170 - 40);
-    servo_right.setAngle(170 - 40);
-    servo_center.setAngle(170 - 40);
-    sleep(1);
-    return 0;
-}
+//      servo_left.setAngle(170 - 33);
+//      servo_right.setAngle(170 - 38);
+//      servo_center.setAngle(170 - 44); //57
+//      sleep(1);
+//      return 0;
+// }
+
+// Compile
+// g++ servo.cpp -o servo -lwiringPi
