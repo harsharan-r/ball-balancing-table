@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <memory>
 #include <pigpio.h>
 
 // TODO: move to config file 
@@ -79,11 +80,12 @@ int main(){
     auto ball_x = std::make_shared<double>(0.0);
     auto ball_y = std::make_shared<double>(0.0);
     auto ball_radius = std::make_shared<double>(0.0);
+    auto ball_stale_ = std::make_shared<bool>(true);
     std::shared_mutex ball_mtx;
 
     // HELPER OBJECTS
-    BallTracker ball_tracker("../config/params.yaml", ball_x, ball_y, ball_radius, ball_mtx);
-    BalanceController balance_controller("../config/params.yaml", servo_center, servo_left, servo_right);
+    BallTracker ball_tracker("../config/params.yaml", ball_x, ball_y, ball_radius, ball_stale_, ball_mtx);
+    BalanceController balance_controller("../config/params.yaml", servo_center, servo_left, servo_right, ball_x, ball_y, ball_radius, ball_stale_, ball_mtx);
 
     // STATE VARIABLES
     bool button_left_released = true;
@@ -124,7 +126,6 @@ int main(){
         else if(state == "running"){
             set_led_colour(150,150,15);
 
-            balance_controller.running();
 
             // Transition to ready state
             if(gpioRead(button_left_GPIO_pin) == 0 && button_left_released){

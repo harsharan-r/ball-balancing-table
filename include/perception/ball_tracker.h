@@ -16,6 +16,7 @@ public:
                          std::shared_ptr<double> ball_x, 
                          std::shared_ptr<double> ball_y, 
                          std::shared_ptr<double> ball_radius,
+                         std::shared_ptr<bool> ball_stale_,
                          std::shared_mutex& ball_mtx);
 
     void startTracking();
@@ -26,11 +27,11 @@ public:
 
     bool is_camera_started = false;
     bool is_calibrated = false;
-    bool is_ball_values_stale = true;
 
     std::shared_ptr<double> ball_x_;
     std::shared_ptr<double> ball_y_;
     std::shared_ptr<double> ball_radius_;
+    std::shared_ptr<bool> ball_stale_;
     std::shared_mutex& ball_mtx_;
 
 private:

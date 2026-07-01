@@ -4,14 +4,33 @@
 #include <unordered_map>
 #include <cmath>
 #include <iostream>
+#include <memory>
+#include <shared_mutex>
 
 #include <yaml-cpp/yaml.h>
 
-BalanceController::BalanceController(const std::string& config_path, Servo& servo_center, Servo& servo_left, Servo& servo_right)
-  : servo_center_(servo_center), servo_left_(servo_left), servo_right_(servo_right){
-    
-  YAML::Node config = YAML::LoadFile(config_path)["control"]["balance_controller"];
-  cfg_ = BalanceControllerConfig(config);
+BalanceController::BalanceController(
+    const std::string& config_path,
+    Servo& servo_center,
+    Servo& servo_left,
+    Servo& servo_right,
+    std::shared_ptr<double> ball_x,
+    std::shared_ptr<double> ball_y,
+    std::shared_ptr<double> ball_radius,
+    std::shared_ptr<bool> ball_stale,
+    std::shared_mutex& ball_mtx
+)
+    : servo_center_(servo_center),
+      servo_left_(servo_left),
+      servo_right_(servo_right),
+      ball_x_(ball_x),
+      ball_y_(ball_y),
+      ball_radius_(ball_radius),
+      ball_stale_(ball_stale),
+      ball_mtx_(ball_mtx)
+{
+    YAML::Node config = YAML::LoadFile(config_path)["control"]["balance_controller"];
+    cfg_ = BalanceControllerConfig(config);
 }
 
 void BalanceController::idle(){
@@ -53,7 +72,7 @@ std::unordered_map<std::string, float> BalanceController::rpz_to_arm_heights(flo
 
     float left_arm_height =
         (3.0f * center_z / 2.0f) - (center_arm_height / 2.0f) +
-        cfg_.arm_to_arm_dist / 2 * std::tan(pitch);
+        cfg_.arm_to_arm_dist / 2.0f * std::tan(pitch);
 
     float right_arm_height =
         3.0f * center_z - center_arm_height - left_arm_height;

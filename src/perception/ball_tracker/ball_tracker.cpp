@@ -17,11 +17,13 @@ BallTracker::BallTracker(const std::string& config_path,
                          std::shared_ptr<double> ball_x, 
                          std::shared_ptr<double> ball_y, 
                          std::shared_ptr<double> ball_radius,
+                         std::shared_ptr<bool> ball_stale,
                          std::shared_mutex& ball_mtx)
     : cm_(std::make_unique<CameraManager>()),
       ball_x_(ball_x),
       ball_y_(ball_y),
       ball_radius_(ball_radius),
+      ball_stale_(ball_stale),
       ball_mtx_(ball_mtx)
 {
     YAML::Node config = YAML::LoadFile(config_path)["perception"]["ball_tracker"];
@@ -178,12 +180,12 @@ void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, boo
   munmap(frame_data, buffer->planes()[0].length);    
   
   // TODO: remove and remove timing variables
-  std::cout << "Resize/Crop: " << std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count() << "μs\n";
-  std::cout << "BGR: " << std::chrono::duration_cast<std::chrono::microseconds>(t4-t3).count() << "μs\n";
-  std::cout << "HSV: " << std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count() << "μs\n";
-  std::cout << "Mask: " << std::chrono::duration_cast<std::chrono::microseconds>(t6-t5).count() << "μs\n";
-  std::cout << "Morph: " << std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count() << "μs\n";
-  std::cout << "Detect: " << std::chrono::duration_cast<std::chrono::microseconds>(t8-t7).count() << "μs\n";
+  // std::cout << "Resize/Crop: " << std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count() << "μs\n";
+  // std::cout << "BGR: " << std::chrono::duration_cast<std::chrono::microseconds>(t4-t3).count() << "μs\n";
+  // std::cout << "HSV: " << std::chrono::duration_cast<std::chrono::microseconds>(t5-t4).count() << "μs\n";
+  // std::cout << "Mask: " << std::chrono::duration_cast<std::chrono::microseconds>(t6-t5).count() << "μs\n";
+  // std::cout << "Morph: " << std::chrono::duration_cast<std::chrono::microseconds>(t7-t6).count() << "μs\n";
+  // std::cout << "Detect: " << std::chrono::duration_cast<std::chrono::microseconds>(t8-t7).count() << "μs\n";
 }
 
 void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
@@ -210,7 +212,7 @@ void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
     *ball_x_ = (center.x-half_crop_width)/half_crop_width;
     *ball_y_ = (center.y-half_crop_height)/half_crop_height;
     *ball_radius_ = static_cast<double>(radius)/(half_crop_width+half_crop_width);
-    is_ball_values_stale = false;
+    *ball_stale_ = false;
 
     
     std::cout << "Ball at (" << *ball_x_ << ", " << *ball_y_
@@ -223,7 +225,9 @@ void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
     cv::circle(frame, center, 3, cv::Scalar(0, 0, 255), -1);
   }
   else{
-    is_ball_values_stale = true;
+    std::unique_lock<std::shared_mutex> lock(ball_mtx_);
+    *ball_stale_ = true;
+    lock.unlock();
   }
 }
 
