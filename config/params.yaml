@@ -1,5 +1,31 @@
+control:
+  balance_controller:
+    # Platform known values
+    ARM_DIST_FROM_CENTER: 55
+    ARM_TO_ARM_DIST: 95
+
+    # Servo arm known values
+    AXIS_OFFSET: 30.0
+    LOWER_ARM_LENGTH: 45.0
+    UPPER_ARM_LENGTH: 98.0
+
+    # Servo offset so lower arm point up is defined as 0 degs
+    SERVO_CENTER_REFERENCE_OFFSET: 36.0
+    SERVO_LEFT_REFERENCE_OFFSET: 47.0
+    SERVO_RIGHT_REFERENCE_OFFSET: 42.0
+
+    # Servo idle mode angles in mm
+    SERVO_CENTER_IDLE_HEIGHT: 75.0 # 65 # TODO change back
+    SERVO_LEFT_IDLE_HEIGHT: 75.0  # 68
+    SERVO_RIGHT_IDLE_HEIGHT: 75.0 #68
+
+    # Platform ready mode values in mm
+    PLATFORM_READY_HEIGHT: 100.0
+    PLATFORM_READY_ROLL: 10.0
+    PLATFORM_READY_PITCH: 10.0
+
 perception:
-  camera:
+  ball_tracker:
     # Stream Settings
     CAMERA_STREAM_INDEX: 0
     CAMERA_STREAM_INDEX: 0
