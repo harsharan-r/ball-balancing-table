@@ -24,8 +24,8 @@ BallTracker::BallTracker(const std::string& config_path,
       ball_radius_(ball_radius),
       ball_mtx_(ball_mtx)
 {
-    YAML::Node config = YAML::LoadFile(config_path)["perception"]["camera"];
-    cfg_ = CameraConfig(config);
+    YAML::Node config = YAML::LoadFile(config_path)["perception"]["ball_tracker"];
+    cfg_ = BallTrackerConfig(config);
 
     ball_hue_min = cfg_.ball_hue_min;
     ball_hue_max = cfg_.ball_hue_max;

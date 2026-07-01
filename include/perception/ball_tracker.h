@@ -1,6 +1,6 @@
 #pragma once
 
-#include "camera_config.h"
+#include "ball_tracker_config.h"
 
 #include <memory>
 #include <string>
@@ -48,7 +48,7 @@ private:
     void detectPingPongBall(cv::Mat &frame, cv::Mat &mask);
     cv::Mat stream_buffer_to_bgrx(uint8_t *&ptr, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
 
-    CameraConfig cfg_;
+    BallTrackerConfig cfg_;
 
     std::unique_ptr<libcamera::CameraManager> cm_;
     std::shared_ptr<libcamera::Camera> camera_;
