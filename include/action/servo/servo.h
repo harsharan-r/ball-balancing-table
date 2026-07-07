@@ -38,6 +38,10 @@ public:
     // Writes the angle to the chip. Prints error if out of range.
     void setAngle(float angle);
 
+    // Angle limits
+    static constexpr float MIN_ANGLE = 0.0f;
+    static constexpr float MAX_ANGLE = 180.0f;
+    
 private:
     void setPWM(int on, int off);
     int  angleToPulse(float angle);
@@ -50,9 +54,7 @@ private:
     static constexpr float CYCLE_DIVISIONS = 4096.0f;  // 12-bit counter
     static constexpr float US_PER_TICK     = CYCLE_LENGTH / CYCLE_DIVISIONS; // ~4.88µs
 
-    // Angle limits
-    static constexpr float MIN_ANGLE = 0.0f;
-    static constexpr float MAX_ANGLE = 180.0f;
+
 
     PCA9685& brd;       // reference to shared board — never copied
     int servo_channel;

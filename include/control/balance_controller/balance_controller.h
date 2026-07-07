@@ -2,7 +2,8 @@
 #pragma once
 
 #include "balance_controller_config.h"
-#include "../action/servo.h"
+#include "action/servo/servo.h"
+#include "control/pid_controller/pid_controller.h"
 
 #include <string>
 #include <unordered_map>
@@ -35,6 +36,9 @@ private:
     Servo& servo_center_;
     Servo& servo_left_;
     Servo& servo_right_;
+
+    PIDController roll_controller;
+    PIDController pitch_controller;
 
     std::shared_ptr<double> ball_x_;
     std::shared_ptr<double> ball_y_;
