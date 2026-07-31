@@ -1,3 +1,29 @@
+main:
+  # GPIO pins
+  BUTTON_LEFT_GPIO_PIN: 21
+  BUTTON_RIGHT_GPIO_PIN: 19
+  LED_RED_GPIO_PIN: 12
+  LED_BLUE_GPIO_PIN: 16
+  LED_GREEN_GPIO_PIN: 13
+
+  # PCA9685 / servo channels
+  PCA9685_ADDR: 0x40
+  PCA9685_FREQ: 50
+  SERVO_CENTER_CHANNEL: 11
+  SERVO_LEFT_CHANNEL: 9
+  SERVO_RIGHT_CHANNEL: 10
+
+  # Servo pulse width calibration, in microseconds (0 deg / 180 deg)
+  SERVO_CENTER_MIN_PULSE_US: 500
+  SERVO_CENTER_MAX_PULSE_US: 2700
+  SERVO_LEFT_MIN_PULSE_US: 500
+  SERVO_LEFT_MAX_PULSE_US: 2700
+  SERVO_RIGHT_MIN_PULSE_US: 500
+  SERVO_RIGHT_MAX_PULSE_US: 2700
+
+  # Main loop
+  MAIN_LOOP_DELAY_MS: 100
+
 control:
   balance_controller:
     # Platform known values
