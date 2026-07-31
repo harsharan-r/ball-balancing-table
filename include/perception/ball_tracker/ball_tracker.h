@@ -7,6 +7,9 @@
 #include <vector>
 #include <shared_mutex>
 
+#include <optional>
+#include <chrono>
+
 #include <libcamera/libcamera.h>
 #include <opencv2/core.hpp>
 
@@ -17,7 +20,8 @@ public:
                          std::shared_ptr<double> ball_y, 
                          std::shared_ptr<double> ball_radius,
                          std::shared_ptr<bool> ball_stale_,
-                         std::shared_mutex& ball_mtx);
+                         std::shared_mutex& ball_mtx,
+                         std::shared_ptr<int> ball_capture_frame);
 
     void startTracking();
     void startCalibration();
@@ -33,6 +37,7 @@ public:
     std::shared_ptr<double> ball_radius_;
     std::shared_ptr<bool> ball_stale_;
     std::shared_mutex& ball_mtx_;
+    std::shared_ptr<int> ball_capture_frame_;
 
 private:
     enum class Mode{
@@ -46,7 +51,7 @@ private:
     void calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
     void calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
     void track(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg, bool save_frame=true);
-    void detectPingPongBall(cv::Mat &frame, cv::Mat &mask);
+    void detectPingPongBall(cv::Mat &frame, cv::Mat &mask, int frame_number);
     cv::Mat stream_buffer_to_bgrx(uint8_t *&ptr, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
 
     BallTrackerConfig cfg_;
@@ -57,6 +62,8 @@ private:
     libcamera::Stream *stream_ = nullptr;
     std::vector<std::unique_ptr<libcamera::Request>> requests_;
     std::unique_ptr<libcamera::ControlList> controls_;
+    std::optional<std::chrono::high_resolution_clock::time_point> prev_frame_time_;
+    std::optional<double> current_fps_;
 
     Mode mode = Mode::Idle;
 

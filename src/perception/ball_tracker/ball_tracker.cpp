@@ -1,7 +1,8 @@
-#include "../../../include/perception/ball_tracker.h"
+#include "perception/ball_tracker/ball_tracker.h"
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <chrono>
 #include <shared_mutex>
@@ -18,13 +19,15 @@ BallTracker::BallTracker(const std::string& config_path,
                          std::shared_ptr<double> ball_y, 
                          std::shared_ptr<double> ball_radius,
                          std::shared_ptr<bool> ball_stale,
-                         std::shared_mutex& ball_mtx)
+                         std::shared_mutex& ball_mtx,
+                         std::shared_ptr<int> ball_capture_frame)
     : cm_(std::make_unique<CameraManager>()),
       ball_x_(ball_x),
       ball_y_(ball_y),
       ball_radius_(ball_radius),
       ball_stale_(ball_stale),
-      ball_mtx_(ball_mtx)
+      ball_mtx_(ball_mtx),
+      ball_capture_frame_(ball_capture_frame)
 {
     YAML::Node config = YAML::LoadFile(config_path)["perception"]["ball_tracker"];
     cfg_ = BallTrackerConfig(config);
@@ -94,37 +97,47 @@ void BallTracker::config_camera() {
 }
 
 void BallTracker::requestComplete(Request *request) {
-  if (request->status() == Request::RequestCancelled) {
-    return;
-  }
-
-  for (const auto &p : request->buffers()) {
-    FrameBuffer *buffer = p.second;
-    const StreamConfiguration &cfg = p.first->configuration();
-    const FrameMetadata &meta = buffer->metadata();
-
-    (void)buffer;
-    (void)cfg;
-
-    if(mode == Mode::Calibration){
-        calibrate(request, buffer, cfg);
-    }
-    else if(mode == Mode::Track){
-        track(buffer, cfg);
+    if (request->status() == Request::RequestCancelled) {
+        return;
     }
 
-    std::cout << "Frame seq=" << meta.sequence << std::endl;
-  }
+    auto now = std::chrono::high_resolution_clock::now();
 
-  if (!is_camera_started) {
-    return;
-  }
+    if (prev_frame_time_.has_value()) {
+        double dt = std::chrono::duration<double>(now - prev_frame_time_.value()).count();
+        if (dt > 0.0) {
+            current_fps_ = 1.0 / dt;
+            std::cout << "Camera FPS: " << current_fps_.value() << std::endl;
+        }
+    }
 
-  request->reuse(Request::ReuseBuffers);
+    prev_frame_time_ = now;
 
-  if (camera_->queueRequest(request) < 0) {
-      throw std::runtime_error("Failed to queue request");
-  }
+    for (const auto &p : request->buffers()) {
+        FrameBuffer *buffer = p.second;
+        const StreamConfiguration &cfg = p.first->configuration();
+        const FrameMetadata &meta = buffer->metadata();
+
+        (void)buffer;
+        (void)cfg;
+
+        if (mode == Mode::Calibration) {
+            calibrate(request, buffer, cfg);
+        }
+        else if (mode == Mode::Track) {
+            track(buffer, cfg);
+        }
+    }
+
+    if (!is_camera_started) {
+        return;
+    }
+
+    request->reuse(Request::ReuseBuffers);
+
+    if (camera_->queueRequest(request) < 0) {
+        throw std::runtime_error("Failed to queue request");
+    }
 }
 
 void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, bool save_frame){
@@ -171,11 +184,13 @@ void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, boo
   cv::dilate(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
 
   auto t7 = std::chrono::high_resolution_clock::now();
-  detectPingPongBall(bgrFrame, mask);                                                 
+  detectPingPongBall(bgrFrame, mask, buffer->metadata().sequence);                                                 
                                          
   auto t8 = std::chrono::high_resolution_clock::now();
      
-  if(save_frame) cv::imwrite("ball_detection.jpg", bgrFrame);
+  const FrameMetadata &meta = buffer->metadata();
+  std::string image_name = "./images/ball_detection_" + std::to_string(meta.sequence) + ".jpg";
+  if(save_frame) cv::imwrite(image_name, bgrFrame);
                                   
   munmap(frame_data, buffer->planes()[0].length);    
   
@@ -188,7 +203,7 @@ void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, boo
   // std::cout << "Detect: " << std::chrono::duration_cast<std::chrono::microseconds>(t8-t7).count() << "μs\n";
 }
 
-void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
+void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask, int frame_number){
 
   std::vector<std::vector<cv::Point>> contours;
   cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
@@ -213,8 +228,8 @@ void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask){
     *ball_y_ = (center.y-half_crop_height)/half_crop_height;
     *ball_radius_ = static_cast<double>(radius)/(half_crop_width+half_crop_width);
     *ball_stale_ = false;
+    *ball_capture_frame_ = frame_number;
 
-    
     std::cout << "Ball at (" << *ball_x_ << ", " << *ball_y_
               << ") radius=" << *ball_radius_ << std::endl;
 
