@@ -1,3 +1,5 @@
 *.exe
 .venv
 build/
+CLAUDE.md
+.*
