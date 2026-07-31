@@ -1,6 +1,7 @@
 // servo.cpp
-#include "../../../include/action/servo.h"
+#include "action/servo/servo.h"
 #include <wiringPiI2C.h>
+#include <cmath>
 #include <unistd.h>
 #include <iostream>
 #include <stdexcept>
@@ -52,7 +53,9 @@ Servo::Servo(PCA9685& board, int channel, int minPulse, int maxPulse)
 
 int Servo::angleToPulse(float angle) {
     if (angle < MIN_ANGLE || angle > MAX_ANGLE) return -1;
-    return static_cast<int>(SERVO_MIN + (angle / 180.0f) * (SERVO_MAX - SERVO_MIN));
+
+    double pulse = SERVO_MIN + (angle / 180.0) * (SERVO_MAX - SERVO_MIN);
+    return static_cast<int>(std::lround(pulse));
 }
 
 void Servo::setPWM(int on, int off) {
