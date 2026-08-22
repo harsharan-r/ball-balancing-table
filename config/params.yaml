@@ -36,9 +36,9 @@ control:
     UPPER_ARM_LENGTH: 98.0
 
     # Servo offset so lower arm point up is defined as 0 degs
-    SERVO_CENTER_REFERENCE_OFFSET: 38.0
-    SERVO_LEFT_REFERENCE_OFFSET: 46.0
-    SERVO_RIGHT_REFERENCE_OFFSET: 42.0
+    SERVO_CENTER_REFERENCE_OFFSET: 36
+    SERVO_LEFT_REFERENCE_OFFSET: 45.0
+    SERVO_RIGHT_REFERENCE_OFFSET: 41.0
 
     # Servo idle mode angles in mm
     SERVO_CENTER_IDLE_HEIGHT: 75.0 # 65 # TODO change back
@@ -46,17 +46,29 @@ control:
     SERVO_RIGHT_IDLE_HEIGHT: 75.0 #68
 
     # Platform ready mode values in mm
-    PLATFORM_READY_HEIGHT: 100.0
+    PLATFORM_READY_HEIGHT: 115.0
     PLATFORM_READY_ROLL: 0.0
     PLATFORM_READY_PITCH: 0.0
 
     # Runner thread 
     BALANCE_CONTROLLER_THREAD_DELAY_MS: 10
 
-    # Filter values
-    ALPHA_X: 0.35 #0.6
-    ALPHA_Y: 0.35 #0.6
-    ALPHA_RADIUS: 0.35 #0.6
+    # Kalman filter values (1D constant-velocity, one filter per axis)
+    # process noise = how much we trust the constant-velocity model between frames
+    # measurement noise = how noisy the raw camera-derived position reading is
+    # starting points only -- tune per-axis on hardware
+    KALMAN_X_PROCESS_NOISE_POS: 0.00001 # 0.01
+    KALMAN_X_PROCESS_NOISE_VEL: 0.2  # 0.5
+    KALMAN_X_MEASUREMENT_NOISE: 0.00000136
+
+    KALMAN_Y_PROCESS_NOISE_POS: 0.00001
+    KALMAN_Y_PROCESS_NOISE_VEL: 0.2  #0.025
+    KALMAN_Y_MEASUREMENT_NOISE: 0.00000050
+
+  # needs to be tuned
+    KALMAN_RADIUS_PROCESS_NOISE_POS: 0.0
+    KALMAN_RADIUS_PROCESS_NOISE_VEL: 0.000014
+    KALMAN_RADIUS_MEASUREMENT_NOISE: 0.00000003
 
     # PID gains and clamp values
     # PID_ROLL_KP: 7.0
@@ -89,7 +101,7 @@ control:
     # PID_HEIGHT_DERIVATIVE_DEADBAND_MULTI: 0.0 
 
     PID_ANTI_WINDUP: true
-    PID_ANTI_WINDUP_THRESHOLD: 0.05
+    PID_ANTI_WINDUP_THRESHOLD: 0.1
 
 ## DECENT TUNE 
     # PID_ROLL_KP: 7.0 # 5.0
@@ -113,15 +125,15 @@ control:
 ## Pretty Smooth 
 
     # PID gains and clamp values
-    PID_ROLL_KP: 7.0
+    PID_ROLL_KP: 7.2 #5.9 , 6.1, 6.1
     PID_ROLL_KI: 0.0 
-    PID_ROLL_KD: 2.4
+    PID_ROLL_KD: 3.8 #4.1 , 4.15, 3.8
     PID_ROLL_MIN: -35.0
     PID_ROLL_MAX: 35.0
 
-    PID_PITCH_KP: 7.0
+    PID_PITCH_KP: 7.85 # 7.85 
     PID_PITCH_KI: 0.0 
-    PID_PITCH_KD: 2.4
+    PID_PITCH_KD: 4.15 # 4.15 
     PID_PITCH_MIN: -35.0
     PID_PITCH_MAX: 35.0
 
@@ -134,12 +146,12 @@ control:
 
     TARGET_RADIUS: 0.148
 
-    PID_ROLL_DERIVATIVE_DEADBAND: 0.75 # 0.4
-    PID_PITCH_DERIVATIVE_DEADBAND: 0.75 # 0.4
+    PID_ROLL_DERIVATIVE_DEADBAND: 0.0 # 0.4
+    PID_PITCH_DERIVATIVE_DEADBAND: 0.0 # 0.4
     PID_HEIGHT_DERIVATIVE_DEADBAND: 0.15 # 0.4
 
-    PID_ROLL_DERIVATIVE_DEADBAND_MULTI: 0.115 # 0.4
-    PID_PITCH_DERIVATIVE_DEADBAND_MULTI: 0.115 # 0.4
+    PID_ROLL_DERIVATIVE_DEADBAND_MULTI: 1.0 # 0.4
+    PID_PITCH_DERIVATIVE_DEADBAND_MULTI: 1.0 # 0.4
     PID_HEIGHT_DERIVATIVE_DEADBAND_MULTI: 0.0 # 0.4
 
 
@@ -150,10 +162,12 @@ perception:
     CAMERA_STREAM_INDEX: 0
     CAMERA_STREAM_WIDTH: 2304
     CAMERA_STREAM_HEIGHT: 1296
-    CAMERA_FRAME_RATE: 27
-    CAMERA_AE_ENABLE: true # TODO: delete
-    CAMERA_AE_WARMUP_FRAMES: 20
-    CAMERA_EXPOSURE_TIME: 6000
+    CAMERA_FRAME_RATE: 35
+    CAMERA_AE_WARMUP_FRAMES: 100
+    CAMERA_AF_WARMUP_FRAMES: 120
+    CAMERA_EXPOSURE_TIME: 28000
+    CAMERA_ANALOGUE_GAIN: 1.7
+    CAMERA_LENS_POSITION: 8.4 # TODO: set from calibrate() log output for hardcoded-no-calibration runs
 
     # Image Processing Settings 
     IMAGE_DOWNSAMPLING_FACTOR: 10
@@ -164,7 +178,7 @@ perception:
     CALIBRATION_MARGIN: 2.5
     CALIBRATION_X_PX: 1152
     CALIBRATION_Y_PX: 648
-    CALIBRATION_RADIUS_PX: 200
+    CALIBRATION_RADIUS_PX: 180
     HSV_HUE_MIN: 0
     HSV_SAT_MIN: 0
     HSV_VALUE_MIN: 0
@@ -173,11 +187,17 @@ perception:
     HSV_VALUE_MAX: 255
 
     # Default Ball Values Before Calibration
-    BALL_HUE_MIN: 8
-    BALL_HUE_MAX: 32
-    BALL_SAT_MIN: 76
+    BALL_HUE_MIN: 9
+    BALL_HUE_MAX: 19
+    BALL_SAT_MIN: 183
     BALL_SAT_MAX: 255
-    BALL_VALUE_MIN: 252
-    BALL_VALUE_MAX: 255
+    BALL_VALUE_MIN: 215
+    BALL_VALUE_MAX: 245
+
+ #HSV MIN: 9, 183, 215
+# HSV MAX: 19, 255, 245
+# exposure time: 27923
+# analogue gain: 1.69536
+# lens position: 8.37083
 
 action:
