@@ -13,6 +13,7 @@ pkg_check_modules(LIBCAMERA REQUIRED IMPORTED_TARGET libcamera)
 add_library(core
     src/action/servo/servo.cpp
     src/control/balance_controller/balance_controller.cpp
+    src/control/kalman_filter/kalman_filter.cpp
     src/control/pid_controller/pid_controller.cpp
     src/perception/ball_tracker/ball_tracker.cpp
 )

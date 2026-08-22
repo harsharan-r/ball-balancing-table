@@ -6,15 +6,12 @@
 
 PIDController::PIDController(){}
 
-float PIDController::update(float error, float dt, float derivative_deadband, float derivative_deadband_multi){
+float PIDController::update(float error, float velocity, float dt, float derivative_deadband, float derivative_deadband_multi){
 
     float proportional = error;
-    float derivative = prev_error_ ? (error-prev_error_.value())/dt : 0;
+    float derivative = std::fabs(velocity) < derivative_deadband ? velocity*derivative_deadband_multi : velocity;
     std::cout << "Proportional: " << proportional << " Derivative: " << derivative << " Integral: " << integral_ << std::endl;
-    derivative = std::fabs(derivative) < derivative_deadband ? derivative*derivative_deadband_multi : derivative;
-    
-    prev_error_ = error;
-    
+
     integral_ += error*dt;
     if(integral_anti_windup_ && std::fabs(error) < integral_anti_windup_threshold_){
         integral_ = 0.0;
@@ -26,7 +23,6 @@ float PIDController::update(float error, float dt, float derivative_deadband, fl
 }
 
 void PIDController::reset(){
-    prev_error_.reset();
     integral_ = 0.0;
 }
 

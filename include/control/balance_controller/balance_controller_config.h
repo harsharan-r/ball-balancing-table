@@ -26,9 +26,17 @@ struct BalanceControllerConfig {
 
   int balance_controller_thread_delay_ms;
 
-  float alpha_x;
-  float alpha_y;
-  float alpha_radius;
+  float kalman_x_process_noise_pos;
+  float kalman_x_process_noise_vel;
+  float kalman_x_measurement_noise;
+
+  float kalman_y_process_noise_pos;
+  float kalman_y_process_noise_vel;
+  float kalman_y_measurement_noise;
+
+  float kalman_radius_process_noise_pos;
+  float kalman_radius_process_noise_vel;
+  float kalman_radius_measurement_noise;
 
   float PID_roll_kp;
   float PID_roll_ki;
@@ -58,7 +66,7 @@ struct BalanceControllerConfig {
   float PID_roll_derivative_deadband_multi;
   float PID_pitch_derivative_deadband_multi;
   float PID_height_derivative_deadband_multi;
-  
+
   bool PID_anti_windup;
   float PID_anti_windup_threshold;
 
@@ -87,9 +95,17 @@ struct BalanceControllerConfig {
 
     balance_controller_thread_delay_ms = config["BALANCE_CONTROLLER_THREAD_DELAY_MS"].as<int>();
 
-    alpha_x = config["ALPHA_X"].as<float>();
-    alpha_y = config["ALPHA_Y"].as<float>();
-    alpha_radius = config["ALPHA_RADIUS"].as<float>();
+    kalman_x_process_noise_pos = config["KALMAN_X_PROCESS_NOISE_POS"].as<float>();
+    kalman_x_process_noise_vel = config["KALMAN_X_PROCESS_NOISE_VEL"].as<float>();
+    kalman_x_measurement_noise = config["KALMAN_X_MEASUREMENT_NOISE"].as<float>();
+
+    kalman_y_process_noise_pos = config["KALMAN_Y_PROCESS_NOISE_POS"].as<float>();
+    kalman_y_process_noise_vel = config["KALMAN_Y_PROCESS_NOISE_VEL"].as<float>();
+    kalman_y_measurement_noise = config["KALMAN_Y_MEASUREMENT_NOISE"].as<float>();
+
+    kalman_radius_process_noise_pos = config["KALMAN_RADIUS_PROCESS_NOISE_POS"].as<float>();
+    kalman_radius_process_noise_vel = config["KALMAN_RADIUS_PROCESS_NOISE_VEL"].as<float>();
+    kalman_radius_measurement_noise = config["KALMAN_RADIUS_MEASUREMENT_NOISE"].as<float>();
 
     PID_roll_kp = config["PID_ROLL_KP"].as<float>();
     PID_roll_ki = config["PID_ROLL_KI"].as<float>();
