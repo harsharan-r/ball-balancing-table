@@ -93,7 +93,11 @@ void BallTracker::config_camera() {
       })
   );
 
+  controls_->set(controls::AeEnable, false);
   controls_->set(controls::ExposureTime, cfg_.camera_exposure_time);
+  controls_->set(controls::AnalogueGain, cfg_.camera_analogue_gain);
+  controls_->set(controls::AfMode, controls::AfModeManual);
+  controls_->set(controls::LensPosition, cfg_.camera_lens_position);
 }
 
 void BallTracker::requestComplete(Request *request) {
@@ -113,6 +117,8 @@ void BallTracker::requestComplete(Request *request) {
 
     prev_frame_time_ = now;
 
+    ControlList pending_controls;
+
     for (const auto &p : request->buffers()) {
         FrameBuffer *buffer = p.second;
         const StreamConfiguration &cfg = p.first->configuration();
@@ -122,7 +128,7 @@ void BallTracker::requestComplete(Request *request) {
         (void)cfg;
 
         if (mode == Mode::Calibration) {
-            calibrate(request, buffer, cfg);
+            calibrate(request, buffer, cfg, pending_controls);
         }
         else if (mode == Mode::Track) {
             track(buffer, cfg);
@@ -133,7 +139,11 @@ void BallTracker::requestComplete(Request *request) {
         return;
     }
 
+    // request->reuse() clears the request's ControlList, so anything calibrate()
+    // set on request->controls() would be wiped before queueing -- controls staged
+    // in pending_controls survive because they're merged back in after reuse().
     request->reuse(Request::ReuseBuffers);
+    request->controls().merge(pending_controls, ControlList::MergePolicy::OverwriteExisting);
 
     if (camera_->queueRequest(request) < 0) {
         throw std::runtime_error("Failed to queue request");
@@ -246,12 +256,57 @@ void BallTracker::detectPingPongBall(cv::Mat &frame, cv::Mat &mask, int frame_nu
   }
 }
 
-void BallTracker::calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, StreamConfiguration const &cfg){
+void BallTracker::calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, StreamConfiguration const &cfg, libcamera::ControlList &pending_controls){
   std::shared_lock<std::shared_mutex> shr_lock(ball_mtx_);
   if (is_calibrated) {
     return;
   }
   shr_lock.unlock();
+
+  if (calibration_frames == 0) {
+    pending_controls.set(libcamera::controls::AeEnable, true);
+    pending_controls.set(libcamera::controls::AfMode, libcamera::controls::AfModeAuto);
+    pending_controls.set(libcamera::controls::AfTrigger, libcamera::controls::AfTriggerStart);
+    std::cout << "Re-enabling AE and triggering AF for calibration" << std::endl;
+    calibration_frames++;
+    return;
+  }
+
+  if (!af_locked_) {
+    const ControlList &metadata = request->metadata();
+    auto af_state_opt = metadata.get(libcamera::controls::AfState);
+    bool af_converged = af_state_opt.has_value() &&
+        (af_state_opt.value() == libcamera::controls::AfStateFocused ||
+         af_state_opt.value() == libcamera::controls::AfStateFailed);
+
+    calibration_frames++;
+    if (!af_converged && calibration_frames < cfg_.camera_af_warmup_frames) {
+      std::cout << "Waiting for autofocus to converge, frame " << calibration_frames << std::endl;
+      return;
+    }
+
+    if (af_state_opt.has_value() && af_state_opt.value() == libcamera::controls::AfStateFailed) {
+      std::cout << "Autofocus failed to converge, locking best-effort lens position" << std::endl;
+    } else if (!af_converged) {
+      std::cout << "Autofocus warmup frame budget exhausted, locking best-effort lens position" << std::endl;
+    }
+
+    auto lens_position_opt = metadata.get(libcamera::controls::LensPosition);
+    if (!lens_position_opt.has_value()) {
+        throw std::runtime_error("LensPosition not found in metadata");
+    }
+    float lens_position = lens_position_opt.value();
+    locked_lens_position_ = lens_position;
+
+    pending_controls.set(libcamera::controls::AfMode, libcamera::controls::AfModeManual);
+    pending_controls.set(libcamera::controls::LensPosition, lens_position);
+    controls_->set(libcamera::controls::AfMode, libcamera::controls::AfModeManual);
+    controls_->set(libcamera::controls::LensPosition, lens_position);
+    af_locked_ = true;
+    calibration_frames = 0;
+    std::cout << "Locking focus" << std::endl;
+    return;
+  }
 
   if (calibration_frames < cfg_.camera_ae_warmup_frames) {
     calibration_frames++;
@@ -262,27 +317,41 @@ void BallTracker::calibrate(libcamera::Request *request, libcamera::FrameBuffer 
   if (calibration_frames == cfg_.camera_ae_warmup_frames) {
     const ControlList &metadata = request->metadata();
     auto exposure_opt = metadata.get(libcamera::controls::ExposureTime);
+    auto gain_opt = metadata.get(libcamera::controls::AnalogueGain);
 
     if (!exposure_opt.has_value()) {
         throw std::runtime_error("ExposureTime not found in metadata");
     }
+    if (!gain_opt.has_value()) {
+        throw std::runtime_error("AnalogueGain not found in metadata");
+    }
 
     int32_t exposure_time = exposure_opt.value();
+    float analogue_gain = gain_opt.value();
+    locked_exposure_time_ = exposure_time;
+    locked_analogue_gain_ = analogue_gain;
 
-    request->controls().set(libcamera::controls::AeEnable, false);
-    request->controls().set(libcamera::controls::ExposureTime, exposure_time);
+    pending_controls.set(libcamera::controls::AeEnable, false);
+    pending_controls.set(libcamera::controls::ExposureTime, exposure_time);
+    pending_controls.set(libcamera::controls::AnalogueGain, analogue_gain);
+    controls_->set(libcamera::controls::AeEnable, false);
+    controls_->set(libcamera::controls::ExposureTime, exposure_time);
+    controls_->set(libcamera::controls::AnalogueGain, analogue_gain);
 
     calibration_frames++;
-    std::cout << "Locking exposure" << std::endl;
+    std::cout << "Locking exposure and gain" << std::endl;
     return;
   }
 
   calibrate_ball_colour(buffer, cfg);
-  std::cout << "Calibrated colour" << std::endl;
+  std::cout << "Calibrated colour, exposure time: " << locked_exposure_time_
+             << ", analogue gain: " << locked_analogue_gain_
+             << ", lens position: " << locked_lens_position_ << std::endl;
 
   std::unique_lock<std::shared_mutex> lock(ball_mtx_);
   is_calibrated = true;
   calibration_frames = 0;
+  af_locked_ = false;
 }
 
 void BallTracker::calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg){

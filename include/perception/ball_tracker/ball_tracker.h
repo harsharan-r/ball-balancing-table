@@ -48,7 +48,7 @@ private:
 
     void config_camera();
     void requestComplete(libcamera::Request *request);
-    void calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
+    void calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg, libcamera::ControlList &pending_controls);
     void calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
     void track(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg, bool save_frame=true);
     void detectPingPongBall(cv::Mat &frame, cv::Mat &mask, int frame_number);
@@ -68,6 +68,10 @@ private:
     Mode mode = Mode::Idle;
 
     int calibration_frames = 0;
+    bool af_locked_ = false;
+    int32_t locked_exposure_time_ = 0;
+    float locked_analogue_gain_ = 0.0f;
+    float locked_lens_position_ = 0.0f;
 
     int ball_hue_min;
     int ball_hue_max;

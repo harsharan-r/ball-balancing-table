@@ -12,9 +12,11 @@ struct BallTrackerConfig {
     int camera_frame_rate;
     int camera_min_frame_duration;
     int camera_max_frame_duration;
-    bool camera_ae_enable; // TODO: delete
     int camera_ae_warmup_frames;
+    int camera_af_warmup_frames;
     int camera_exposure_time;
+    float camera_analogue_gain;
+    float camera_lens_position;
 
     int image_downsampling_factor;
     int image_crop_width;
@@ -48,9 +50,11 @@ struct BallTrackerConfig {
         camera_frame_rate = config["CAMERA_FRAME_RATE"].as<int>();
         camera_min_frame_duration = MILLISECONDS_IN_SECOND / camera_frame_rate;
         camera_max_frame_duration = MILLISECONDS_IN_SECOND / camera_frame_rate;
-        camera_ae_enable = config["CAMERA_AE_ENABLE"].as<bool>();  // TODO: delete
         camera_ae_warmup_frames = config["CAMERA_AE_WARMUP_FRAMES"].as<int>();
+        camera_af_warmup_frames = config["CAMERA_AF_WARMUP_FRAMES"].as<int>();
         camera_exposure_time = config["CAMERA_EXPOSURE_TIME"].as<int>();
+        camera_analogue_gain = config["CAMERA_ANALOGUE_GAIN"].as<float>();
+        camera_lens_position = config["CAMERA_LENS_POSITION"].as<float>();
 
         image_downsampling_factor = config["IMAGE_DOWNSAMPLING_FACTOR"].as<int>();
         image_crop_width = config["IMAGE_CROP_WIDTH"].as<int>();
