@@ -14,6 +14,7 @@
 
 using namespace libcamera;
 
+
 BallTracker::BallTracker(const std::string& config_path, 
                          std::shared_ptr<double> ball_x, 
                          std::shared_ptr<double> ball_y, 
@@ -32,12 +33,12 @@ BallTracker::BallTracker(const std::string& config_path,
     YAML::Node config = YAML::LoadFile(config_path)["perception"]["ball_tracker"];
     cfg_ = BallTrackerConfig(config);
 
-    ball_hue_min = cfg_.ball_hue_min;
-    ball_hue_max = cfg_.ball_hue_max;
-    ball_sat_min = cfg_.ball_sat_min;
-    ball_sat_max = cfg_.ball_sat_max;
-    ball_value_min = cfg_.ball_value_min;
-    ball_value_max = cfg_.ball_value_max;
+    ball_hue_min = cfg_.ball_search_hue_min;
+    ball_hue_max = cfg_.ball_search_hue_max;
+    ball_sat_min = cfg_.ball_search_sat_min;
+    ball_sat_max = cfg_.ball_search_sat_max;
+    ball_value_min = cfg_.ball_search_value_min;
+    ball_value_max = cfg_.ball_search_value_max;
 
     config_camera();
 }
@@ -179,7 +180,7 @@ void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, boo
 
   cv::Mat hsvFrame;
   cv::cvtColor(bgrFrame, hsvFrame, cv::COLOR_BGR2HSV);                     
- 
+
   auto t5 = std::chrono::high_resolution_clock::now();
 
   cv::Scalar lower(ball_hue_min, ball_sat_min, ball_value_min);
@@ -380,12 +381,12 @@ void BallTracker::calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamer
   int value_min = mean[2] - cfg_.calibration_margin * stddev[2];
   int value_max = mean[2] + cfg_.calibration_margin * stddev[2];
 
-  ball_hue_min = std::clamp(hue_min, cfg_.hsv_hue_min, cfg_.hsv_hue_max);
-  ball_hue_max = std::clamp(hue_max, cfg_.hsv_hue_min, cfg_.hsv_hue_max);
-  ball_sat_min = std::clamp(sat_min, cfg_.hsv_sat_min, cfg_.hsv_sat_max);
-  ball_sat_max = std::clamp(sat_max, cfg_.hsv_sat_min, cfg_.hsv_sat_max);
-  ball_value_min = std::clamp(value_min, cfg_.hsv_value_min, cfg_.hsv_value_max);
-  ball_value_max = std::clamp(value_max, cfg_.hsv_value_min, cfg_.hsv_value_max);
+  ball_hue_min = std::clamp(hue_min, cfg_.hsv_clamp_hue_min, cfg_.hsv_clamp_hue_max);
+  ball_hue_max = std::clamp(hue_max, cfg_.hsv_clamp_hue_min, cfg_.hsv_clamp_hue_max);
+  ball_sat_min = std::clamp(sat_min, cfg_.hsv_clamp_sat_min, cfg_.hsv_clamp_sat_max);
+  ball_sat_max = std::clamp(sat_max, cfg_.hsv_clamp_sat_min, cfg_.hsv_clamp_sat_max);
+  ball_value_min = std::clamp(value_min, cfg_.hsv_clamp_value_min, cfg_.hsv_clamp_value_max);
+  ball_value_max = std::clamp(value_max, cfg_.hsv_clamp_value_min, cfg_.hsv_clamp_value_max);
 
   std::cout << "HSV MIN: " << ball_hue_min << ", " 
                            << ball_sat_min << ", "

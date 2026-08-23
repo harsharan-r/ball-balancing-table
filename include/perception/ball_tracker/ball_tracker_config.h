@@ -27,19 +27,19 @@ struct BallTrackerConfig {
     float calibration_y_px;
     int calibration_radius_px;
 
-    int ball_hue_min;
-    int ball_hue_max;
-    int ball_sat_min;
-    int ball_sat_max;
-    int ball_value_min;
-    int ball_value_max;
+    int ball_search_hue_min;
+    int ball_search_hue_max;
+    int ball_search_sat_min;
+    int ball_search_sat_max;
+    int ball_search_value_min;
+    int ball_search_value_max;
 
-    int hsv_hue_min;
-    int hsv_sat_min;
-    int hsv_value_min;
-    int hsv_hue_max;
-    int hsv_sat_max;
-    int hsv_value_max;
+    int hsv_clamp_hue_min;
+    int hsv_clamp_sat_min;
+    int hsv_clamp_value_min;
+    int hsv_clamp_hue_max;
+    int hsv_clamp_sat_max;
+    int hsv_clamp_value_max;
 
     BallTrackerConfig() = default;
 
@@ -65,18 +65,18 @@ struct BallTrackerConfig {
         calibration_y_px = config["CALIBRATION_Y_PX"].as<float>();
         calibration_radius_px = config["CALIBRATION_RADIUS_PX"].as<int>();
 
-        ball_hue_max = config["BALL_HUE_MAX"].as<int>();
-        ball_hue_min = config["BALL_HUE_MIN"].as<int>();
-        ball_sat_min = config["BALL_SAT_MIN"].as<int>();
-        ball_sat_max = config["BALL_SAT_MAX"].as<int>();
-        ball_value_min = config["BALL_VALUE_MIN"].as<int>();
-        ball_value_max = config["BALL_VALUE_MAX"].as<int>();
+        ball_search_hue_max = config["BALL_SEARCH_HUE_MAX"].as<int>();
+        ball_search_hue_min = config["BALL_SEARCH_HUE_MIN"].as<int>();
+        ball_search_sat_min = config["BALL_SEARCH_SAT_MIN"].as<int>();
+        ball_search_sat_max = config["BALL_SEARCH_SAT_MAX"].as<int>();
+        ball_search_value_min = config["BALL_SEARCH_VALUE_MIN"].as<int>();
+        ball_search_value_max = config["BALL_SEARCH_VALUE_MAX"].as<int>();
 
-        hsv_hue_min = config["HSV_HUE_MIN"].as<int>();
-        hsv_sat_min = config["HSV_SAT_MIN"].as<int>();
-        hsv_value_min = config["HSV_VALUE_MIN"].as<int>();
-        hsv_hue_max = config["HSV_HUE_MAX"].as<int>();
-        hsv_sat_max = config["HSV_SAT_MAX"].as<int>();
-        hsv_value_max = config["HSV_VALUE_MAX"].as<int>();
+        hsv_clamp_hue_min = config["HSV_CLAMP_HUE_MIN"].as<int>();
+        hsv_clamp_sat_min = config["HSV_CLAMP_SAT_MIN"].as<int>();
+        hsv_clamp_value_min = config["HSV_CLAMP_VALUE_MIN"].as<int>();
+        hsv_clamp_hue_max = config["HSV_CLAMP_HUE_MAX"].as<int>();
+        hsv_clamp_sat_max = config["HSV_CLAMP_SAT_MAX"].as<int>();
+        hsv_clamp_value_max = config["HSV_CLAMP_VALUE_MAX"].as<int>();
     }
 };
