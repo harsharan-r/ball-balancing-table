@@ -96,7 +96,12 @@ int main(){
             balance_controller.idle();
 
             // Transition to ready state
-            if(gpioRead(cfg.button_left_gpio_pin) == 0 && button_left_released) state = "ready";
+            if(gpioRead(cfg.button_left_gpio_pin) == 0 && button_left_released) {
+                // ==================== TEMP TUNING INSTRUMENTATION ====================
+                balance_controller.reload_config();
+                // =======================================================================
+                state = "ready";
+            }
         }
         else if(state == "ready"){
             set_led_colour(cfg, 0,0,255);
@@ -128,6 +133,10 @@ int main(){
             if(gpioRead(cfg.button_left_gpio_pin) == 0 && button_left_released){
                 ball_tracker.stopCamera();
                 balance_controller.stop_balancing_thread();
+                // ==================== TEMP TUNING INSTRUMENTATION ====================
+                balance_controller.plot_and_clear_log();
+                balance_controller.reload_config();
+                // =======================================================================
                 state = "ready";
             }
         }
@@ -137,6 +146,9 @@ int main(){
             // Transition to ready state
             if(ball_tracker.is_calibrated) {
                 ball_tracker.stopCamera();
+                // ==================== TEMP TUNING INSTRUMENTATION ====================
+                balance_controller.reload_config();
+                // =======================================================================
                 state = "ready";
             }
         }

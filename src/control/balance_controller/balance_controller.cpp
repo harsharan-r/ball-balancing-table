@@ -247,7 +247,9 @@ void BalanceController::running() {
             constexpr double kLookaheadS = 0.00;
             double lookahead_x = current_x + vel_x * kLookaheadS;
             double lookahead_y = current_y + vel_y * kLookaheadS;
-            // =================================================================================
+ 	    double lookahead_radius = current_radius + (vel_radius * 1.0);          
+ 
+ 	   // =================================================================================
 
             float roll = roll_controller.update(
                 lookahead_y,
@@ -265,17 +267,8 @@ void BalanceController::running() {
                 cfg_.PID_pitch_derivative_deadband_multi
             );
 
-            // ==================== TEMP TUNING INSTRUMENTATION ====================
-            double elapsed_s = std::chrono::duration<double>(now - run_start).count();
-            tuning_log << elapsed_s << ","
-                       << measured_x << "," << measured_y << ","
-                       << current_x << "," << current_y << ","
-                       << vel_x << "," << vel_y << ","
-                       << pitch << "," << roll << "\n";
-            // =======================================================================
-
             float height = height_controller.update(
-                cfg_.target_radius - current_radius,
+                cfg_.target_radius - lookahead_radius,
                 -vel_radius,
                 cfg_.balance_controller_thread_delay_ms/1000.0,
                 cfg_.PID_height_derivative_deadband,
@@ -283,6 +276,17 @@ void BalanceController::running() {
             );
 
             height = cfg_.target_radius - current_radius > cfg_.PID_height_threshold ? height : 0.0;
+
+            // ==================== TEMP TUNING INSTRUMENTATION ====================
+            double elapsed_s = std::chrono::duration<double>(now - run_start).count();
+            tuning_log << elapsed_s << ","
+                       << measured_x << "," << measured_y << ","
+                       << current_x << "," << current_y << ","
+                       << vel_x << "," << vel_y << ","
+                       << pitch << "," << roll << ","
+                       << measured_radius << "," << current_radius << ","
+                       << vel_radius << "," << height << "\n";
+            // =======================================================================
 
             std::cout << "measured_frame: " << measured_frame << std::endl;
             std::cout << "current_x: " << current_x << " current_y: " << current_y << " current_radius: " << current_radius  << std::endl;
