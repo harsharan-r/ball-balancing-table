@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Wrapper around scripts/{setup,build,run}.sh -- usage: ./balance <setup|build|run>
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+usage() {
+    echo "Usage: $0 <setup|build|run>"
+    exit 1
+}
+
+[[ $# -eq 1 ]] || usage
+
+case "$1" in
+    setup) exec ./scripts/setup.sh ;;
+    build) exec ./scripts/build.sh ;;
+    run)   exec ./scripts/run.sh ;;
+    *)     usage ;;
+esac
