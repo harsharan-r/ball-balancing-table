@@ -39,3 +39,33 @@ move between idle / ready / calibration / running states (see `CLAUDE.md` for de
 
 `./balance` is a thin wrapper around `scripts/setup.sh`, `scripts/build.sh`, and
 `scripts/run.sh`, which can also be run directly.
+
+## Implementation Details
+
+### Camera Pipeline
+
+The camera pipeline uses libcamera to get images from pi camera module 3.
+
+Each libcamera frame buffer is `mmap`'d directly into a `cv::Mat` header — zero copy, no
+`.clone()` needed. From there the pipeline is ordered to shrink the image as early as
+possible, before any of the more expensive per-pixel work runs:
+
+1. **Crop to ROI, then downsample** — a plain `cv::Mat` sub-view followed
+   by `cv::resize`. The image is first cropped to only cover the area of the platform, then resized to reduce its quality to a point where there are enough pixels (10+) to define the ping pong ball at a 50 cm distance. Cropping/resizing first means every later stage runs on a much smaller
+   image instead of the full sensor resolution.
+2. **BGRA → BGR → HSV** color conversion on the now-small frame.
+
+   ![HSV frame](assets/camera/ball_hsv.jpg)
+3. **`cv::inRange`** thresholds against the calibrated HSV range, then `cv::erode` +
+   `cv::dilate` clean up the mask in place, reusing the same buffer rather than allocating
+   a new one each step.
+
+   ![Thresholded mask](assets/camera/ball_mask.jpg)
+4. **Contour detection** finds the largest contour in the mask and fits a minimum enclosing
+   circle to get the ball's center and radius.
+
+   ![Detected ball](assets/camera/ball.jpg)
+
+Doing the crop/resize *before* the color conversion and masking is the main optimization:
+it's much cheaper to shrink one BGRA frame than to run HSV conversion, thresholding, and
+morphology at full sensor resolution and shrink the result afterward. 
