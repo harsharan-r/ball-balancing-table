@@ -87,7 +87,7 @@ morphology at full sensor resolution and shrink the result afterward.
 
 ### Balance Controller 
 
-**Inverse Kinematics:**
+**Inverse Kinematics**
 
 The inverse kinematics convert a desired platform roll, pitch, and height into the three servo angles needed to reach that pose. This is done in two steps: first, roll, pitch, and height are used to calculate the required height of each arm (center, left, right); then each arm height is converted into its corresponding servo angle using the geometry of the linkage (lower arm length, upper arm length, and axis offset), with a per-servo offset applied to correct for mechanical zero-point differences between the three servos, the derivations follow:
 
@@ -97,3 +97,14 @@ The inverse kinematics convert a desired platform roll, pitch, and height into t
 **Arm height to servo angle:**
 ![arm](assets/arms.jpeg)
 
+**Kalman Filtering**
+
+The raw ball position from the camera is noisy and only updates at camera framerate, so a Kalman filter (one each for x, y, and radius) fuses each new measurement into a smoothed position + velocity estimate. Between camera frames, the filter predicts forward using its own velocity estimate, so the control loop always has a fresh estimate even if a new frame hasn't arrived yet. This allowed the balance controller to run at 100hz and not be limited by the 35 fps the camera pipeline was outputing.
+
+**PID Control**
+
+Three independent PID controllers run each cycle: roll and pitch use the ball's y and x position (plus the Kalman-estimated velocity as the derivative term) to tilt the platform toward center, while a height controller adjusts the platform's overall height based on the ball's estimated radius, effectively pushing the platform up or down to "catch" the ball as it approaches or moves away from the camera. Anti-windup and a derivative deadband are applied to prevent integral runaway and to reduce jitter from noisy velocity estimates.
+
+**How it all connects**
+
+Each control cycle: the filtered ball position feeds the PID loops, whose roll/pitch/height outputs are added to the platform's ready-state pose, converted to arm heights via inverse kinematics, and finally to servo angles, closing the loop between what the camera sees and where the servos move.
