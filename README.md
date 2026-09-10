@@ -42,6 +42,21 @@ move between idle / ready / calibration / running states (see `CLAUDE.md` for de
 
 ## Implementation Details
 
+### State Machine
+
+The main source file runs a state machine that transitions through the following states:
+![State Machine](assets/state_machine.png)
+
+State Description:
+
+**Idle** - Initializes the camera, servos, and balance controller.
+
+**Ready** - Raises the platform to a set height, preparing it for calibration or running.
+
+**Calibrate** - Calibrates the camera's intrinsic values for the current lighting (AF, AE, analogue gain) and saves the ball's hue range.
+
+**Run** - Detects the ping pong ball's position and height, balances it at the center, and catches it if it's falling off the platform.
+
 ### Camera Pipeline
 
 The camera pipeline uses libcamera to get images from pi camera module 3.
@@ -69,3 +84,16 @@ possible, before any of the more expensive per-pixel work runs:
 Doing the crop/resize *before* the color conversion and masking is the main optimization:
 it's much cheaper to shrink one BGRA frame than to run HSV conversion, thresholding, and
 morphology at full sensor resolution and shrink the result afterward. 
+
+### Balance Controller 
+
+**Inverse Kinematics:**
+
+The inverse kinematics convert a desired platform roll, pitch, and height into the three servo angles needed to reach that pose. This is done in two steps: first, roll, pitch, and height are used to calculate the required height of each arm (center, left, right); then each arm height is converted into its corresponding servo angle using the geometry of the linkage (lower arm length, upper arm length, and axis offset), with a per-servo offset applied to correct for mechanical zero-point differences between the three servos, the derivations follow:
+
+**Roll, pitch, height to arm heights:**
+![platform](assets/platform.jpg)
+
+**Arm height to servo angle:**
+![arm](assets/arms.jpeg)
+
