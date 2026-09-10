@@ -1,6 +1,6 @@
 # Ball Balancing Table 
 
-A small deskstop ping pong ball balancing machine that uses a Pi Camera Module 3 to track the ping pong ball, and uses three MG 996R on a 3 DOF Stewart type platform. Everything is done via Raspberry Pi 3B+ 1 GB ram with a adafruit servo hat. The goal was to explore computer vision, state estimation, and motion controls. 
+This project is a ball-balancing table that uses three servos to tilt a small platform and keep a ping pong ball centered on it. A Pi Camera tracks the ball at 35 FPS, and a Kalman filter cleans up the noisy readings into a smooth position and velocity estimate. That lets the balance controller run at 100Hz, so it's not stuck waiting on the camera. PID loops on roll, pitch, and height then use that estimate to keep the ball balanced in the middle.
 
 ## Demo
 
@@ -8,7 +8,7 @@ A small deskstop ping pong ball balancing machine that uses a Pi Camera Module 3
 ## About this project
 
 Three servo-actuated legs drive an RRS parallel linkage under a 120mm platform. A Pi Camera
-tracks the ball's position via HSV color masking, a Kalman filter smooths that into a
+tracks the ball's position via HSV colour masking, a Kalman filter smooths that into a
 position + velocity estimate, and independent PID loops on roll/pitch/height keep the ball
 centered.
 
@@ -35,7 +35,7 @@ centered.
 ```
 
 Runs `sudo ./build/main`, since GPIO/I2C access requires root. Use the two GPIO buttons to
-move between idle / ready / calibration / running states (see `CLAUDE.md` for details).
+move between idle / ready / calibration / running states 
 
 `./balance` is a thin wrapper around `scripts/setup.sh`, `scripts/build.sh`, and
 `scripts/run.sh`, which can also be run directly.
@@ -61,14 +61,13 @@ State Description:
 
 The camera pipeline uses libcamera to get images from pi camera module 3.
 
-Each libcamera frame buffer is `mmap`'d directly into a `cv::Mat` header — zero copy, no
-`.clone()` needed. From there the pipeline is ordered to shrink the image as early as
+Each libcamera frame buffer is `mmap`'d directly into a `cv::Mat` header. From there, the pipeline is ordered to shrink the image as early as
 possible, before any of the more expensive per-pixel work runs:
 
-1. **Crop to ROI, then downsample** — a plain `cv::Mat` sub-view followed
+1. **Crop to ROI, then downsample** a plain `cv::Mat` sub-view followed
    by `cv::resize`. The image is first cropped to only cover the area of the platform, then resized to reduce its quality to a point where there are enough pixels (10+) to define the ping pong ball at a 50 cm distance. Cropping/resizing first means every later stage runs on a much smaller
    image instead of the full sensor resolution.
-2. **BGRA → BGR → HSV** color conversion on the now-small frame.
+2. **BGRA → BGR → HSV** colour conversion on the now-small frame.
 
    ![HSV frame](assets/camera/ball_hsv.jpg)
 3. **`cv::inRange`** thresholds against the calibrated HSV range, then `cv::erode` +
@@ -81,9 +80,8 @@ possible, before any of the more expensive per-pixel work runs:
 
    ![Detected ball](assets/camera/ball.jpg)
 
-Doing the crop/resize *before* the color conversion and masking is the main optimization:
-it's much cheaper to shrink one BGRA frame than to run HSV conversion, thresholding, and
-morphology at full sensor resolution and shrink the result afterward. 
+Doing the crop/resize before the colour conversion and masking is the main optimization as it's much cheaper to shrink one BGRA frame than to run HSV conversion, thresholding, and
+morphology at full sensor resolution and shrink the result afterward. This lets the pipeline hit a steady **35 FPS on a Pi 3B+ with 1GB ram**.
 
 ### Balance Controller 
 
@@ -99,7 +97,7 @@ The inverse kinematics convert a desired platform roll, pitch, and height into t
 
 **Kalman Filtering**
 
-The raw ball position from the camera is noisy and only updates at camera framerate, so a Kalman filter (one each for x, y, and radius) fuses each new measurement into a smoothed position + velocity estimate. Between camera frames, the filter predicts forward using its own velocity estimate, so the control loop always has a fresh estimate even if a new frame hasn't arrived yet. This allowed the balance controller to run at 100hz and not be limited by the 35 fps the camera pipeline was outputing.
+The raw ball position from the camera is noisy and only updates at camera framerate, so a Kalman filter (one each for x, y, and radius) fuses each new measurement into a smoothed position + velocity estimate. Between camera frames, the filter predicts forward using its own velocity estimate, so the control loop always has a fresh estimate even if a new frame hasn't arrived yet. This allowed the balance controller to run at 100Hz, fast enough to react before the ball rolls off the 120mm platform, and not be limited by the 35 FPS the camera pipeline was outputting.
 
 **PID Control**
 
@@ -108,3 +106,16 @@ Three independent PID controllers run each cycle: roll and pitch use the ball's 
 **How it all connects**
 
 Each control cycle: the filtered ball position feeds the PID loops, whose roll/pitch/height outputs are added to the platform's ready-state pose, converted to arm heights via inverse kinematics, and finally to servo angles, closing the loop between what the camera sees and where the servos move.
+
+## Hardware
+
+All STL files for the robot are available in assets/3d_models.
+
+- **Compute:** Raspberry Pi 3B+ (1 GB RAM)
+- **Camera:** Pi Camera Module 3
+- **Servos:** 3× MG996R metal-gear servos
+- **Servo driver:** Adafruit 16-channel PWM/Servo HAT (PCA9685) over I2C
+- **Power:** Separate 5V/6V supply for the servos (Pi powered independently)
+- **Platform:** 120mm diameter top plate with RRS parallel linkage
+- **Buttons:** 2x 12x12x5mm Tactile 4 Pin Push Button Switch
+- **LED:** Common Cathode RGB LED
