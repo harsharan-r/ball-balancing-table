@@ -39,8 +39,18 @@ BallTracker::BallTracker(const std::string& config_path,
     ball_sat_max = cfg_.ball_search_sat_max;
     ball_value_min = cfg_.ball_search_value_min;
     ball_value_max = cfg_.ball_search_value_max;
+    update_hsv_bounds();
+
+    int frame_center_x = (cfg_.camera_stream_width  - cfg_.image_crop_width)  / 2;
+    int frame_center_y = (cfg_.camera_stream_height - cfg_.image_crop_height) / 2;
+    crop_roi_ = cv::Rect(frame_center_x, frame_center_y, cfg_.image_crop_width, cfg_.image_crop_height);
 
     config_camera();
+}
+
+void BallTracker::update_hsv_bounds() {
+    hsv_lower_ = cv::Scalar(ball_hue_min, ball_sat_min, ball_value_min);
+    hsv_upper_ = cv::Scalar(ball_hue_max, ball_sat_max, ball_value_max);
 }
 
 void BallTracker::config_camera() {
@@ -156,55 +166,43 @@ void BallTracker::track(FrameBuffer *buffer, StreamConfiguration const &cfg, boo
   uint8_t *frame_data;
   cv::Mat bgrxFrame = stream_buffer_to_bgrx(frame_data, buffer, cfg);
 
-  auto t2 = std::chrono::high_resolution_clock::now();  
+  // auto t2 = std::chrono::high_resolution_clock::now();
 
-  int frame_center_x = (cfg_.camera_stream_width  - cfg_.image_crop_width)  / 2;
-  int frame_center_y = (cfg_.camera_stream_height - cfg_.image_crop_height) / 2;
+  bgrxFrame = bgrxFrame(crop_roi_);
 
-  cv::Rect roi(frame_center_x, frame_center_y, cfg_.image_crop_width, cfg_.image_crop_height);
-
-  bgrxFrame =  bgrxFrame(roi);
-
-  cv::resize(bgrxFrame, 
-              bgrxFrame, 
+  cv::resize(bgrxFrame,
+              bgrxFrame,
               cv::Size(cfg_.image_crop_width/cfg_.image_downsampling_factor,
-                      cfg_.image_crop_height/cfg_.image_downsampling_factor));  
-     
-  auto t3 = std::chrono::high_resolution_clock::now();
-                 
-  cv::Mat bgrFrame;
-  
-  cv::cvtColor(bgrxFrame, bgrFrame, cv::COLOR_BGRA2BGR);                                          
-  
-  auto t4 = std::chrono::high_resolution_clock::now();
+                      cfg_.image_crop_height/cfg_.image_downsampling_factor));
 
-  cv::Mat hsvFrame;
-  cv::cvtColor(bgrFrame, hsvFrame, cv::COLOR_BGR2HSV);                     
+  // auto t3 = std::chrono::high_resolution_clock::now();
 
-  auto t5 = std::chrono::high_resolution_clock::now();
+  cv::cvtColor(bgrxFrame, bgr_frame_, cv::COLOR_BGRA2BGR);
 
-  cv::Scalar lower(ball_hue_min, ball_sat_min, ball_value_min);
-  cv::Scalar upper(ball_hue_max, ball_sat_max, ball_value_max);
+  // auto t4 = std::chrono::high_resolution_clock::now();
 
-  cv::Mat mask;
-  cv::inRange(hsvFrame, lower, upper, mask);
-  
-  auto t6 = std::chrono::high_resolution_clock::now();
+  cv::cvtColor(bgr_frame_, hsv_frame_, cv::COLOR_BGR2HSV);
 
-  cv::erode(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
-  cv::dilate(mask, mask, cv::Mat(), cv::Point(-1,-1),2);
+  // auto t5 = std::chrono::high_resolution_clock::now();
 
-  auto t7 = std::chrono::high_resolution_clock::now();
-  detectPingPongBall(bgrFrame, mask, buffer->metadata().sequence);                                                 
-                                         
-  auto t8 = std::chrono::high_resolution_clock::now();
-     
+  cv::inRange(hsv_frame_, hsv_lower_, hsv_upper_, mask_);
+
+  // auto t6 = std::chrono::high_resolution_clock::now();
+
+  cv::erode(mask_, mask_, cv::Mat(), cv::Point(-1,-1),2);
+  cv::dilate(mask_, mask_, cv::Mat(), cv::Point(-1,-1),2);
+
+  // auto t7 = std::chrono::high_resolution_clock::now();
+  detectPingPongBall(bgr_frame_, mask_, buffer->metadata().sequence);
+
+  // auto t8 = std::chrono::high_resolution_clock::now();
+
   const FrameMetadata &meta = buffer->metadata();
-  std::string image_name = "./images/ball_detection_" + std::to_string(meta.sequence) + ".jpg";
-  if(save_frame) cv::imwrite(image_name, bgrFrame);
-                                  
-  munmap(frame_data, buffer->planes()[0].length);    
-  
+  std::string image_name = "./.images/ball_detection_" + std::to_string(meta.sequence) + ".jpg";
+  if(meta.sequence % 15 == 0) cv::imwrite(image_name, bgr_frame_);
+
+  munmap(frame_data, buffer->planes()[0].length);
+
   // TODO: remove and remove timing variables
   // std::cout << "Resize/Crop: " << std::chrono::duration_cast<std::chrono::microseconds>(t3-t2).count() << "μs\n";
   // std::cout << "BGR: " << std::chrono::duration_cast<std::chrono::microseconds>(t4-t3).count() << "μs\n";
@@ -387,8 +385,9 @@ void BallTracker::calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamer
   ball_sat_max = std::clamp(sat_max, cfg_.hsv_clamp_sat_min, cfg_.hsv_clamp_sat_max);
   ball_value_min = std::clamp(value_min, cfg_.hsv_clamp_value_min, cfg_.hsv_clamp_value_max);
   ball_value_max = std::clamp(value_max, cfg_.hsv_clamp_value_min, cfg_.hsv_clamp_value_max);
+  update_hsv_bounds();
 
-  std::cout << "HSV MIN: " << ball_hue_min << ", " 
+  std::cout << "HSV MIN: " << ball_hue_min << ", "
                            << ball_sat_min << ", "
                            << ball_value_min << ", "
                            << std::endl;
