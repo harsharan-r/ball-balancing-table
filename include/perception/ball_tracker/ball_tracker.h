@@ -47,6 +47,7 @@ private:
     };
 
     void config_camera();
+    void update_hsv_bounds();
     void requestComplete(libcamera::Request *request);
     void calibrate(libcamera::Request *request, libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg, libcamera::ControlList &pending_controls);
     void calibrate_ball_colour(libcamera::FrameBuffer *buffer, libcamera::StreamConfiguration const &cfg);
@@ -79,4 +80,17 @@ private:
     int ball_sat_max;
     int ball_value_min;
     int ball_value_max;
+
+    // Cached, recomputed only when they actually change (crop_roi_ is fixed at
+    // construction; hsv_lower_/hsv_upper_ are refreshed after calibration) instead
+    // of being rebuilt every frame in track().
+    cv::Rect crop_roi_;
+    cv::Scalar hsv_lower_;
+    cv::Scalar hsv_upper_;
+
+    // Reused across frames so cv::Mat::create() can skip reallocation once the
+    // first frame has sized these to match.
+    cv::Mat bgr_frame_;
+    cv::Mat hsv_frame_;
+    cv::Mat mask_;
 };
