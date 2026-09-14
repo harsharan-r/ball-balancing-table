@@ -3,7 +3,7 @@
 This project is a ball-balancing table that uses three servos to tilt a small platform and keep a ping pong ball centered on it. A Pi Camera tracks the ball at 35 FPS, and a Kalman filter cleans up the noisy readings into a smooth position and velocity estimate. That lets the balance controller run at 100Hz, so it's not stuck waiting on the camera. PID loops on roll, pitch, and height then use that estimate to keep the ball balanced in the middle.
 
 ## Demo
-
+[![Demo Video](assets/thumbnail.png)](https://youtu.be/rpswAqHhNys?si=UYZartBwDwxu3crl)
 
 ## About this project
 
