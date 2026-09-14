@@ -101,7 +101,7 @@ The raw ball position from the camera is noisy and only updates at camera framer
 
 **PID Control**
 
-Three independent PID controllers run each cycle: roll and pitch use the ball's y and x position (plus the Kalman-estimated velocity as the derivative term) to tilt the platform toward center, while a height controller adjusts the platform's overall height based on the ball's estimated radius, effectively pushing the platform up or down to "catch" the ball as it approaches or moves away from the camera. Anti-windup and a derivative deadband are applied to prevent integral runaway and to reduce jitter from noisy velocity estimates.
+Three independent PID controllers run each cycle: roll and pitch use the ball's y and x position (plus the Kalman-estimated velocity as the derivative term) to tilt the platform toward center, while a height controller adjusts the platform's overall height based on the ball's estimated radius, effectively pushing the platform up or down to "catch" the ball as it approaches or moves away from the camera. 
 
 **How it all connects**
 
